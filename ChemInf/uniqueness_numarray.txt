@@ -1,0 +1,17 @@
+create or replace function uniqueness_numarray (x in numarray) return binary_integer
+deterministic parallel_enable is
+begin
+
+  for i in 1..x.count-1 loop
+
+    for j in i+1..x.count loop
+
+      if x(j) = x(i) then return 0; end if;
+
+    end loop;
+
+  end loop;
+
+  return 1;
+
+end;

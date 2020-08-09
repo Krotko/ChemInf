@@ -1,0 +1,55 @@
+create or replace function permutation_class_TH (permutation in numarray) return integer deterministic parallel_enable is
+  perm numarray := numarray();
+  maxdist number;
+
+  -- matrix of permutations for tetrahedral chirality TH
+
+  -- equivalent permutations
+  ord01 numarray := numarray(1, 2, 3, 4);
+  ord02 numarray := numarray(1, 4, 2, 3);
+  ord03 numarray := numarray(1, 3, 4, 2);
+  ord04 numarray := numarray(2, 3, 1, 4);
+  ord05 numarray := numarray(2, 4, 3, 1);
+  ord06 numarray := numarray(2, 1, 4, 3);
+  ord07 numarray := numarray(3, 1, 2, 4);
+  ord08 numarray := numarray(3, 4, 1, 2);
+  ord09 numarray := numarray(3, 2, 4, 1);
+  ord10 numarray := numarray(4, 1, 3, 2);
+  ord11 numarray := numarray(4, 2, 1, 3);
+  ord12 numarray := numarray(4, 3, 2, 1);
+
+  -- non-equivalent permutations
+  ord13 numarray := numarray(1, 4, 3, 2);
+  ord14 numarray := numarray(1, 3, 2, 4);
+  ord15 numarray := numarray(1, 2, 4, 3);
+  ord16 numarray := numarray(2, 1, 3, 4);
+  ord17 numarray := numarray(2, 4, 1, 3);
+  ord18 numarray := numarray(2, 3, 4, 1);
+  ord19 numarray := numarray(3, 2, 1, 4);
+  ord20 numarray := numarray(3, 4, 2, 1);
+  ord21 numarray := numarray(3, 1, 4, 2);
+  ord22 numarray := numarray(4, 1, 2, 3);
+  ord23 numarray := numarray(4, 3, 1, 2);
+  ord24 numarray := numarray(4, 2, 3, 1);
+
+  ord matrix := matrix(ord01, ord02, ord03, ord04, ord05, ord06, ord07, ord08, ord09, ord10, ord11, ord12,
+                       ord13, ord14, ord15, ord16, ord17, ord18, ord19, ord20, ord21, ord22, ord23, ord24);
+
+begin
+
+  perm := permutation;
+
+  rank_numarray (perm, maxdist);
+
+  for i in 1..24 loop
+
+    if ord(i)(1) = perm(1) and ord(i)(2) = perm(2) and
+       ord(i)(3) = perm(3) and ord(i)(4) = perm(4)
+       then return ceil (i/12);
+    end if;
+
+  end loop;
+
+  return 0;
+
+end;

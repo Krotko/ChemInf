@@ -1,0 +1,26 @@
+create or replace procedure rank_numarray (x in out numarray, highest_rank out integer) deterministic parallel_enable is
+  y numarray := numarray ();
+  d numarray := numarray ();
+begin
+
+  y := x;
+
+  sort_numarray (y);
+
+  d.extend; d(1) := y(1);
+
+  for i in 2..y.count loop
+
+    if y(i) > d(d.count) then d.extend; d(d.count) := y(i); end if;
+
+  end loop;
+
+  highest_rank := d.count;
+
+  for i in 1..x.count loop
+
+    x(i) := binary_search (x(i), d);
+
+  end loop;
+
+end;

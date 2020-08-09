@@ -1,0 +1,25 @@
+create or replace function lexcompare (x in numarray, y in numarray) return binary_integer deterministic parallel_enable is
+  n binary_integer;
+begin
+
+  -- Result: 1 - (x < y), 0 - (x = y), -1 - (x > y)
+
+  if x.count = 0 and y.count = 0 then return 0; end if;
+  if x.count <= y.count then n := x.count; else n := y.count; end if;
+
+  for i in 1..n loop
+
+    if x(i) < y(i) then return 1; end if;
+    if x(i) > y(i) then return -1; end if;
+
+    if x(i) is null and y(i) is not null then return -1; end if;
+    if x(i) is not null and y(i) is null then return 1; end if;
+
+  end loop;
+
+  if x.count < y.count then return 1; end if;
+  if x.count > y.count then return -1; end if;
+
+  return 0;
+
+end;

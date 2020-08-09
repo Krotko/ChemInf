@@ -1,0 +1,83 @@
+create or replace package ChemInf authid definer is
+
+  type atom is record -- properties of the atom
+  (-- local properties of atom:
+   number integer,
+   mass integer,
+   charge integer,
+   organogen integer,
+   class integer,
+   rank integer,
+   -- properties of neighborhood of the atom:
+   degree integer, -- explicit connections
+   hcount integer, -- implicit hydrogens
+   total_hcount integer, -- attached hydrogens
+   connectivity integer, -- total connections
+   valence integer, -- total bond order
+   -- nonlocal properties of the atom:
+   ring_connectivity integer, -- total ring connections
+   ring_membership integer,
+   ring_size integer,
+   max_bonds_ringsize integer,
+   aromaticity integer,
+   distance_inv integer,
+   symmetry_class integer,
+   stereocenter integer,
+   parity integer,
+   chirality integer
+   );
+
+  type atoms is table of atom;
+
+  type bond is record
+  (atom1 integer,
+   atom2 integer,
+   bondtype integer,
+   ring_membership integer,
+   ring_size integer
+  );
+
+  type bonds is table of bond;
+
+  type numarray is table of number;
+  type matrix is table of numarray;
+
+  function instr_count (str in varchar2, substr in varchar2) return integer;
+  function power (x in number, n in binary_integer) return number;
+  function prime (n in integer) return integer;
+
+  procedure swap_numbers (x in out number, y in out number);
+  procedure sort_numarray (x in out numarray);
+  function binary_search (a in number, x in numarray) return integer;
+  procedure rank_numarray (x in out numarray, highest_rank out integer);
+  function uniqueness_numarray (x in numarray) return binary_integer;
+
+  function lexcompare (x in numarray, y in numarray) return binary_integer;
+  procedure swap_numarray (x in out numarray, y in out numarray);
+  procedure sort_matrix (x in out matrix);
+  function binary_search_matrix (a in numarray, x in matrix) return integer;
+  function rank_matrix (x in matrix) return numarray;
+
+  function smi2atom (atomsymbol in varchar2) return atom;
+  function atom2smi (atom in atom, chimode in integer) return varchar2;
+
+  function map_count (atoms in atoms, bonds in bonds) return matrix;
+  procedure rings_detection (atoms in out atoms, bonds in out bonds, map in matrix);
+  procedure aromaticity_detection (atoms in out atoms, bonds in out bonds, map in matrix);
+  function initrank (atom in atom) return number;
+  function distance_inv_count (atoms in atoms, bonds in bonds, n in integer, map in matrix) return integer;
+  function chiralatoms_count (atoms in atoms) return integer;
+  procedure canon (ranks in out numarray, bonds in numarray, map in matrix, bt in integer);
+  procedure symmetry_detection (atoms in out atoms, bonds in bonds, map in matrix);
+  function symmetry_classes_count (atoms in atoms) return integer;
+  function permutation_class_TH (permutation in numarray) return integer;
+  procedure stereocenters_detection (atoms in out atoms, bonds in bonds, map in matrix);
+  function stereocenters_count (atoms in atoms) return integer;
+  function components_count (atoms in atoms, bonds in bonds, map in matrix) return integer;
+  function rings_count (atoms in atoms, bonds in bonds) return integer;
+
+  procedure smilin (smiles in varchar2, atoms out atoms, bonds out bonds);
+  function cangen (atoms in atoms, bonds in bonds) return varchar2;
+  function canonsmi (pSmi in varchar2, chimode in integer) return varchar2;
+
+end ChemInf;

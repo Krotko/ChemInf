@@ -1,0 +1,25 @@
+create or replace function binary_search (a in number, x in numarray) return integer deterministic parallel_enable is
+  l integer;
+  r integer;
+  m integer;
+begin
+
+  if a < x(1) or a > x(x.count) then return null; end if;
+
+  l := 1; r := x.count;
+
+  while l < r loop
+
+    m := floor ((l+r)/2);
+
+    if x(m) < a then l := m + 1;
+                else r := m;
+    end if;
+
+  end loop;
+
+  if x(r) = a then return r;
+              else return null;
+  end if;
+
+end;

@@ -1,0 +1,560 @@
+create or replace function cangen (atoms in Cheminf.atoms, bonds in Cheminf.bonds, chimode in integer default (1)) return varchar2 deterministic parallel_enable is
+  map matrix := matrix();
+  rmap matrix := matrix();
+  marked numarray := numarray();
+  stack numarray := numarray();
+  chords Cheminf.bonds := Cheminf.bonds();
+  ring_closures numarray := numarray();
+  stereocenters numarray := numarray();
+  permutation numarray := numarray(null, null, null, null);
+  initpos binary_integer;
+  pos binary_integer;
+  minrank binary_integer;
+  minbond binary_integer;
+  minpos binary_integer;
+  branches binary_integer;
+  st binary_integer;
+  i binary_integer;
+  j binary_integer;
+  k binary_integer;
+  m binary_integer;
+  r binary_integer;
+  f binary_integer;
+  smi varchar2(1024);
+begin
+
+  map := map_count (atoms, bonds);
+  chords := bonds;
+
+  for i in 1..atoms.count loop
+
+    if atoms(i).parity > 0 then
+       stereocenters.extend; stereocenters(stereocenters.count) := i;
+       stereocenters.extend(4);
+    end if;
+
+  end loop;
+
+  i := 1;
+  initpos := 0;
+
+  while initpos = 0 and i <= atoms.count loop
+    if atoms(i).rank = 1 then initpos := i; end if;
+    i := i + 1;
+  end loop;
+
+  for i in 1..atoms.count loop marked.extend; marked(i) := 0; end loop;
+
+  -- first DFS
+  smi := '';
+  pos := initpos;
+  m := 0;
+
+  loop
+
+    if marked(pos) = 0 then
+       smi := smi || atom2smi (atoms(pos), chimode);
+       marked(pos) := 1; m := m + 1;
+    end if;
+
+    minrank := atoms.count + 1;
+    branches := 0;
+
+    for i in 1..map(pos).count loop
+
+      if bonds(map(pos)(i)).atom1 = pos and marked(bonds(map(pos)(i)).atom2) = 0 then
+
+         branches := branches + 1;
+
+         if atoms(bonds(map(pos)(i)).atom2).rank < minrank then
+            minbond := map(pos)(i);
+            minpos := bonds(minbond).atom2;
+            minrank := atoms(bonds(minbond).atom2).rank;
+         end if;
+
+      end if;
+
+      if bonds(map(pos)(i)).atom2 = pos and marked(bonds(map(pos)(i)).atom1) = 0 then
+
+         branches := branches + 1;
+
+         if atoms(bonds(map(pos)(i)).atom1).rank < minrank then
+            minbond := map(pos)(i);
+            minpos := bonds(minbond).atom1;
+            minrank := atoms(bonds(minbond).atom1).rank;
+         end if;
+
+      end if;
+
+    end loop;
+
+    if branches > 1 then
+       stack.extend; stack(stack.count) := pos;
+       smi := smi || '(';
+    end if;
+
+    if branches >= 1 then
+
+       case bonds(minbond).bondtype
+         when 2 then smi := smi || '=';
+         when 3 then smi := smi || '#';
+         when 4 then smi := smi || '$';
+         else null;
+       end case;
+
+       chords(minbond).bondtype := 0;
+
+       pos := minpos;
+
+    end if;
+
+    if branches = 0 and stack.count > 0 then
+       pos := stack(stack.count); stack.trim;
+       smi := smi || ')';
+       branches := 1;
+    end if;
+
+    if branches = 0 and stack.count = 0 then
+
+       exit when m >= atoms.count;
+
+       smi := smi || '.';
+
+       minrank := atoms.count + 1;
+
+       for i in 1..atoms.count loop
+
+         if marked(i) = 0 and atoms(i).rank < minrank then pos := i; minrank := atoms(i).rank; end if;
+
+       end loop;
+
+    end if;
+
+  end loop;
+
+  k := 0;
+  i := 1;
+
+  while k = 0 and i <= chords.count loop
+
+    if chords(i).bondtype > 0 then k := 1; end if;
+
+    i := i + 1;
+
+  end loop;
+
+  -- if there are no chords of rings and stereocenters then return result
+  if k = 0 and stereocenters.count = 0 then return smi; end if;
+
+  smi := '';
+  stack.trim(stack.count);
+  rmap := map;
+
+  for i in 1..atoms.count loop marked(i) := 0; end loop;
+
+  -- second DFS
+  pos := initpos;
+  m := 0;
+
+  loop
+
+    if marked(pos) = 0 then
+       smi := smi || atom2smi (atoms(pos), chimode);
+       marked(pos) := 1; m := m + 1;
+
+      for i in 1..stereocenters.count/5 loop
+
+        for j in 1..map(stereocenters(5*i-4)).count loop
+
+          if pos in (bonds(map(stereocenters(5*i-4))(j)).atom1, bonds(map(stereocenters(5*i-4))(j)).atom2)
+             and pos <> stereocenters(5*i-4) and chords(map(stereocenters(5*i-4))(j)).bondtype = 0 then
+
+             f := 0; k := 3;
+             while f = 0 and k >= 0 loop
+               if stereocenters(5*i-k) is null then f := k; end if;
+               k := k - 1;
+             end loop;
+
+             stereocenters(5*i-f) := pos;
+
+          end if;
+
+        end loop;
+
+      end loop;
+
+      st := 0;
+
+      if atoms(pos).parity > 0 then
+         i := 1;
+         while st = 0 and i <= stereocenters.count/5 loop
+           if stereocenters(5*i-4) = pos then st := i; end if;
+           i := i + 1;
+         end loop;
+      end if;
+
+      if st > 0 and atoms(pos).hcount = 1 then
+
+          f := 0; k := 3;
+          while f = 0 and k >= 0 loop
+            if stereocenters(5*st-k) is null then f := k; end if;
+            k := k - 1;
+          end loop;
+
+          stereocenters(5*st-f) := 0;
+
+      end if;
+
+      if st > 0 and ((atoms(pos).number = 16 and atoms(pos).valence = 4 and atoms(pos).degree <= 3)
+                      or (atoms(pos).number = 15 and atoms(pos).valence = 3 and atoms(pos).degree <= 3))
+         then
+
+          f := 0; k := 3;
+          while f = 0 and k >= 0 loop
+            if stereocenters(5*st-k) is null then f := k; end if;
+            k := k - 1;
+          end loop;
+
+          stereocenters(5*st-f) := -1;
+
+      end if;
+
+    end if;
+
+    loop
+
+      minbond := 0;
+      minrank := atoms.count + 1;
+
+      for j in 1..rmap(pos).count loop
+
+        if rmap(pos)(j) > 0 and bonds(rmap(pos)(j)).atom1 = pos
+           and chords(rmap(pos)(j)).bondtype > 0 and atoms(bonds(rmap(pos)(j)).atom2).rank < minrank then
+
+           minbond := rmap(pos)(j);
+           minpos := bonds(minbond).atom2;
+           minrank := atoms(bonds(minbond).atom2).rank;
+
+        end if;
+
+        if rmap(pos)(j) > 0 and bonds(rmap(pos)(j)).atom2 = pos
+           and chords(rmap(pos)(j)).bondtype > 0 and atoms(bonds(rmap(pos)(j)).atom1).rank < minrank then
+
+           minbond := rmap(pos)(j);
+           minpos := bonds(minbond).atom1;
+           minrank := atoms(bonds(minbond).atom1).rank;
+
+        end if;
+
+      end loop;
+
+      if minbond > 0 then
+
+         r := 0;
+         j := 1;
+
+         while r = 0 and j <= ring_closures.count loop
+ 
+           if ring_closures(j) = minpos and ring_closures(j+1) = pos
+              then r := (j + 1)/2;
+           end if;
+
+           j := j + 2;
+
+         end loop;
+
+         if r = 0 then
+            ring_closures.extend; ring_closures(ring_closures.count) := pos;
+            ring_closures.extend; ring_closures(ring_closures.count) := minpos;
+            r := ring_closures.count/2;
+         end if;
+
+         case bonds(minbond).bondtype
+           when 2 then smi := smi || '=';
+           when 3 then smi := smi || '#';
+           when 4 then smi := smi || '$';
+           else null;
+         end case;
+
+         case length (to_char (r))
+           when 1 then smi := smi || to_char (r);
+           when 2 then smi := smi || '%' || to_char (r);
+           else smi := smi || '%(' || to_char (r) || ')';
+         end case;
+
+         for j in 1..rmap(pos).count loop
+
+           if rmap(pos)(j) = minbond then rmap(pos)(j) := 0; end if;
+
+         end loop;
+
+         if st > 0 then
+
+            f := 0; k := 3;
+            while f = 0 and k >= 0 loop
+              if stereocenters(5*st-k) is null then f := k; end if;
+              k := k - 1;
+            end loop;
+
+            stereocenters(5*st-f) := minpos;
+
+         end if;
+
+        else exit;
+
+      end if;
+
+    end loop;
+
+    minrank := atoms.count + 1;
+    branches := 0;
+
+    for i in 1..map(pos).count loop
+
+      if bonds(map(pos)(i)).atom1 = pos and rmap(pos)(i) > 0 and marked(bonds(map(pos)(i)).atom2) = 0 then
+
+         branches := branches + 1;
+
+         if atoms(bonds(map(pos)(i)).atom2).rank < minrank then
+            minbond := map(pos)(i);
+            minpos := bonds(minbond).atom2;
+            minrank := atoms(bonds(minbond).atom2).rank;
+         end if;
+
+      end if;
+
+      if bonds(map(pos)(i)).atom2 = pos and rmap(pos)(i) > 0 and marked(bonds(map(pos)(i)).atom1) = 0 then
+
+         branches := branches + 1;
+
+         if atoms(bonds(map(pos)(i)).atom1).rank < minrank then
+            minbond := map(pos)(i);
+            minpos := bonds(minbond).atom1;
+            minrank := atoms(bonds(minbond).atom1).rank;
+         end if;
+
+      end if;
+
+    end loop;
+
+    if branches > 1 then
+       stack.extend; stack(stack.count) := pos;
+       smi := smi || '(';
+    end if;
+
+    if branches >= 1 then
+
+       case bonds(minbond).bondtype
+         when 2 then smi := smi || '=';
+         when 3 then smi := smi || '#';
+         when 4 then smi := smi || '$';
+         else null;
+       end case;
+
+       pos := minpos;
+
+    end if;
+
+    if branches = 0 and stack.count > 0 then
+       pos := stack(stack.count); stack.trim;
+       smi := smi || ')';
+       branches := 1;
+    end if;
+
+    if branches = 0 and stack.count = 0 then
+
+       exit when m >= atoms.count;
+
+       smi := smi || '.';
+
+       minrank := atoms.count + 1;
+
+       for i in 1..atoms.count loop
+
+         if marked(i) = 0 and atoms(i).rank < minrank then pos := i; minrank := atoms(i).rank; end if;
+
+       end loop;
+
+    end if;
+
+  end loop;
+
+  -- if chimode = 0 or there are no stereocenters then return result
+  if chimode = 0 or stereocenters.count = 0 then return smi; end if;
+
+  smi := '';
+  stack.trim(stack.count);
+  rmap := map;
+  ring_closures.trim(ring_closures.count);
+
+  for i in 1..atoms.count loop marked(i) := 0; end loop;
+
+  -- if stereocenters exist then third DFS
+  pos := initpos;
+  m := 0;
+
+  loop
+
+    if marked(pos) = 0 then
+       if atoms(pos).parity = 0
+          then smi := smi || atom2smi (atoms(pos));
+          else k := 0; i := 1;
+               while k = 0 and i <= stereocenters.count/5 loop
+                 if stereocenters(5*i-4) = pos then k := i; end if;
+                 i := i + 1;
+               end loop;
+               permutation := numarray(stereocenters(5*k-3), stereocenters(5*k-2), stereocenters(5*k-1), stereocenters(5*k));
+               smi := smi || atom2smi (atoms(pos), permutation_class_TH (permutation));
+       end if;
+       marked(pos) := 1; m := m + 1;
+    end if;
+
+    loop
+
+      minbond := 0;
+      minrank := atoms.count + 1;
+
+      for j in 1..rmap(pos).count loop
+
+        if rmap(pos)(j) > 0 and bonds(rmap(pos)(j)).atom1 = pos
+           and chords(rmap(pos)(j)).bondtype > 0 and atoms(bonds(rmap(pos)(j)).atom2).rank < minrank then
+
+           minbond := rmap(pos)(j);
+           minpos := bonds(minbond).atom2;
+           minrank := atoms(bonds(minbond).atom2).rank;
+
+        end if;
+
+        if rmap(pos)(j) > 0 and bonds(rmap(pos)(j)).atom2 = pos
+           and chords(rmap(pos)(j)).bondtype > 0 and atoms(bonds(rmap(pos)(j)).atom1).rank < minrank then
+
+           minbond := rmap(pos)(j);
+           minpos := bonds(minbond).atom1;
+           minrank := atoms(bonds(minbond).atom1).rank;
+
+        end if;
+
+      end loop;
+
+      if minbond > 0 then
+
+         r := 0;
+         j := 1;
+
+         while r = 0 and j <= ring_closures.count loop
+ 
+           if ring_closures(j) = minpos and ring_closures(j+1) = pos
+              then r := (j + 1)/2;
+           end if;
+
+           j := j + 2;
+
+         end loop;
+
+         if r = 0 then
+            ring_closures.extend; ring_closures(ring_closures.count) := pos;
+            ring_closures.extend; ring_closures(ring_closures.count) := minpos;
+            r := ring_closures.count/2;
+         end if;
+
+         case bonds(minbond).bondtype
+           when 2 then smi := smi || '=';
+           when 3 then smi := smi || '#';
+           when 4 then smi := smi || '$';
+           else null;
+         end case;
+
+         case length (to_char (r))
+           when 1 then smi := smi || to_char (r);
+           when 2 then smi := smi || '%' || to_char (r);
+           else smi := smi || '%(' || to_char (r) || ')';
+         end case;
+
+         for j in 1..rmap(pos).count loop
+
+           if rmap(pos)(j) = minbond then rmap(pos)(j) := 0; end if;
+
+         end loop;
+
+        else exit;
+
+      end if;
+
+    end loop;
+
+    minrank := atoms.count + 1;
+    branches := 0;
+
+    for i in 1..map(pos).count loop
+
+      if bonds(map(pos)(i)).atom1 = pos and rmap(pos)(i) > 0 and marked(bonds(map(pos)(i)).atom2) = 0 then
+
+         branches := branches + 1;
+
+         if atoms(bonds(map(pos)(i)).atom2).rank < minrank then
+            minbond := map(pos)(i);
+            minpos := bonds(minbond).atom2;
+            minrank := atoms(bonds(minbond).atom2).rank;
+         end if;
+
+      end if;
+
+      if bonds(map(pos)(i)).atom2 = pos and rmap(pos)(i) > 0 and marked(bonds(map(pos)(i)).atom1) = 0 then
+
+         branches := branches + 1;
+
+         if atoms(bonds(map(pos)(i)).atom1).rank < minrank then
+            minbond := map(pos)(i);
+            minpos := bonds(minbond).atom1;
+            minrank := atoms(bonds(minbond).atom1).rank;
+         end if;
+
+      end if;
+
+    end loop;
+
+    if branches > 1 then
+       stack.extend; stack(stack.count) := pos;
+       smi := smi || '(';
+    end if;
+
+    if branches >= 1 then
+
+       case bonds(minbond).bondtype
+         when 2 then smi := smi || '=';
+         when 3 then smi := smi || '#';
+         when 4 then smi := smi || '$';
+         else null;
+       end case;
+
+       pos := minpos;
+
+    end if;
+
+    if branches = 0 and stack.count > 0 then
+       pos := stack(stack.count); stack.trim;
+       smi := smi || ')';
+       branches := 1;
+    end if;
+
+    if branches = 0 and stack.count = 0 then
+
+       exit when m >= atoms.count;
+
+       smi := smi || '.';
+
+       minrank := atoms.count + 1;
+
+       for i in 1..atoms.count loop
+
+         if marked(i) = 0 and atoms(i).rank < minrank then pos := i; minrank := atoms(i).rank; end if;
+
+       end loop;
+
+    end if;
+
+  end loop;
+
+  return smi;
+
+end;

@@ -1,0 +1,34 @@
+create or replace procedure stereocenters_detection (atoms in out Cheminf.atoms, bonds in Cheminf.bonds, map in matrix)
+deterministic parallel_enable is
+  permutation numarray :=  numarray();
+begin
+
+  for i in 1..atoms.count loop
+
+    atoms(i).stereocenter := 0;
+
+    permutation.trim(permutation.count);
+
+    if atoms(i).hcount = 1 then
+       permutation.extend; permutation(permutation.count) := 0;
+    end if;
+
+    if atoms(i).number in (15, 16) and atoms(i).degree <= 3 then
+       permutation.extend; permutation(permutation.count) := -1;
+    end if;
+
+    for j in 1..map(i).count loop
+
+      permutation.extend;
+
+      if bonds(map(i)(j)).atom1 = i then permutation(permutation.count) := atoms(bonds(map(i)(j)).atom2).symmetry_class;
+                                    else permutation(permutation.count) := atoms(bonds(map(i)(j)).atom1).symmetry_class;
+      end if;
+
+    end loop;
+
+    if permutation.count >= 4 then atoms(i).stereocenter := uniqueness_numarray (permutation); end if;
+
+  end loop;
+
+end;

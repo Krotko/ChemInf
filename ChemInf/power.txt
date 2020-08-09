@@ -1,0 +1,26 @@
+create or replace function power (x in number, n in binary_integer) return number deterministic parallel_enable is
+  p number;
+  a number;
+  m binary_integer;
+begin
+
+  if n < 0 then return null; end if;
+  if n = 0 then return 1; end if;
+
+  p := 1; a := x; m := n;
+
+  while m > 0 loop
+
+    if mod (m, 2) = 0
+
+       then a := a * a; m := m / 2;
+
+       else p := p * a; m := m - 1;
+
+    end if;
+
+  end loop;
+
+  return p;
+
+end;

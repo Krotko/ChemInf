@@ -1,0 +1,9 @@
+create or replace function stereocenters_count (atoms in Cheminf.atoms) return integer deterministic parallel_enable is
+  st integer := 0;
+begin
+
+  for i in 1..atoms.count loop st := st + atoms(i).stereocenter; end loop;
+
+  return st;
+
+end;

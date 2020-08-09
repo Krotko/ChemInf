@@ -1,0 +1,19 @@
+create or replace procedure sort_numarray (x in out numarray) deterministic parallel_enable is
+  k binary_integer;
+begin
+
+  for i in 1..x.count-1 loop
+
+    k := i;
+
+    for j in i+1..x.count loop
+
+      if x(j) < x(k) then k := j; end if;
+
+    end loop;
+
+    if k <> i then swap_numbers (x(i), x(k)); end if;
+
+  end loop;
+
+end;

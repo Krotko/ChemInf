@@ -1,0 +1,49 @@
+create or replace procedure symmetry_detection (atoms in out Cheminf.atoms, bonds in Cheminf.bonds, map in matrix)
+deterministic parallel_enable is
+  ring_invariant integer;
+  inv matrix := matrix();
+  r numarray := numarray();
+  dist integer;
+begin
+
+  for i in 1..atoms.count loop
+
+    ring_invariant := 1;
+
+    for j in 1..map(i).count loop
+
+      if bonds(map(i)(j)).ring_size > 0 then ring_invariant := ring_invariant * prime (bonds(map(i)(j)).ring_size); end if;
+
+    end loop;
+
+    inv.extend; inv(i) := numarray (initrank (atoms(i)), ring_invariant, atoms(i).distance_inv);
+
+  end loop;
+
+  r := rank_matrix (inv);
+
+  for i in 1..atoms.count loop atoms(i).rank := r(i); end loop;
+
+  canon (atoms, bonds, map, dist);
+
+  if dist < atoms.count then
+
+     for i in 1..atoms.count loop
+
+       atoms(i).distance_inv := nvl (atoms(i).distance_inv, distance_inv_count (atoms, bonds, i, map));
+
+       inv(i)(3) := atoms(i).distance_inv;
+
+     end loop;
+
+     r := rank_matrix (inv);
+
+     for i in 1..atoms.count loop atoms(i).rank := r(i); end loop;
+
+     canon (atoms, bonds, map, dist);
+
+  end if;
+
+  for i in 1..atoms.count loop atoms(i).symmetry_class := atoms(i).rank; end loop;
+
+end;

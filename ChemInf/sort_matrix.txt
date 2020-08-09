@@ -1,0 +1,19 @@
+create or replace procedure sort_matrix (x in out matrix) deterministic parallel_enable is
+  k binary_integer;
+begin
+
+  for i in 1..x.count-1 loop
+
+    k := i;
+
+    for j in i+1..x.count loop
+
+      if lexcompare (x(j), x(k)) = 1 then k := j; end if;
+
+    end loop;
+
+    if k <> i then swap_numarray (x(i), x(k)); end if;
+
+  end loop;
+
+end;

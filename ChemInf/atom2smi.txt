@@ -1,0 +1,261 @@
+create or replace function atom2smi (atom in Cheminf.atom, chimode in integer default (1)) return varchar2 deterministic parallel_enable is
+  smi varchar2(16);
+  s varchar(2);
+  ch integer := 0;
+begin
+
+  if chimode = 0 then ch := 0; end if;
+  if chimode in (1, -1) then ch := atom.parity; end if;
+  if chimode = 2 and atom.parity > 0 then ch := 3 - atom.parity; end if;
+
+  if atom.number = 6 and atom.valence = 4 and atom.aromaticity = 0
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'C';
+  end if;
+
+  if atom.number = 6 and atom.valence = 4 and atom.aromaticity = 1
+     and atom.mass is null and atom.charge = 0 and atom.parity = 0
+     then return 'c';
+  end if;
+
+  if atom.number = 7 and atom.valence = 3 and atom.aromaticity = 0
+     and atom.mass is null and atom.charge = 0 and ch = 0
+    then return 'N';
+  end if;
+
+  if atom.number = 7 and atom.valence = 5 and atom.hcount <= 1
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'N';
+  end if;
+
+  if atom.number = 7 and atom.valence = 3 and atom.aromaticity = 1
+     and atom.hcount = 0 and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'n';
+  end if;
+
+  if atom.number = 7 and atom.valence = 3 and atom.aromaticity = 1
+     and atom.hcount = 1 and atom.mass is null and atom.charge = 0 and ch = 0
+     then return '[nH]';
+  end if;
+
+  if atom.number = 8 and atom.valence = 2 and atom.aromaticity = 0
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'O';
+  end if;
+
+  if atom.number = 8 and atom.valence = 2 and atom.aromaticity = 1
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'o';
+  end if;
+
+  if atom.number = 16 and atom.valence = 2 and atom.aromaticity = 0
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'S';
+  end if;
+
+  if atom.number = 16 and atom.valence in (4, 6) and atom.hcount <= 1
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'S';
+  end if;
+
+  if atom.number = 16 and atom.valence = 2 and atom.aromaticity = 1
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 's';
+  end if;
+
+  if atom.number = 9 and atom.valence = 1
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'F';
+  end if;
+
+  if atom.number = 17 and atom.valence = 1
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'Cl';
+  end if;
+
+  if atom.number = 35 and atom.valence = 1
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'Br';
+  end if;
+
+  if atom.number = 53 and atom.valence = 1
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'I';
+  end if;
+
+  if atom.number = 5 and atom.valence = 3 and atom.aromaticity = 0
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'B';
+  end if;
+
+  if atom.number = 5 and atom.valence = 3 and atom.aromaticity = 1
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'b';
+  end if;
+
+  if atom.number = 15 and atom.valence = 3 and atom.aromaticity = 0
+     and atom.mass is null and atom.charge = 0 and ch = 0
+    then return 'P';
+  end if;
+
+  if atom.number = 15 and atom.valence = 5 and atom.hcount <= 1
+     and atom.mass is null and atom.charge = 0 and ch = 0
+    then return 'P';
+  end if;
+
+  if atom.number = 15 and atom.valence = 3 and atom.aromaticity = 1
+     and atom.hcount = 0 and atom.mass is null and atom.charge = 0 and ch = 0
+     then return 'p';
+  end if;
+
+  if atom.number = 15 and atom.valence = 3 and atom.aromaticity = 1
+     and atom.hcount = 1 and atom.mass is null and atom.charge = 0 and ch = 0
+     then return '[pH]';
+  end if;
+
+  if atom.number = 0 and atom.hcount = 0
+     and atom.mass is null and atom.charge = 0 and ch = 0
+     then return '*';
+  end if;
+
+  smi := '[';
+
+  if atom.mass is not null and chimode <> 0 then smi := smi || to_char (atom.mass); end if;
+
+  case atom.number
+    when 0 then s := '*';
+    when 1 then s := 'H';
+    when 2 then s := 'He';
+    when 3 then s := 'Li';
+    when 4 then s := 'Be';
+    when 5 then s := 'B';
+    when 6 then s := 'C';
+    when 7 then s := 'N';
+    when 8 then s := 'O';
+    when 9 then s := 'F';
+    when 10 then s := 'Ne';
+    when 11 then s := 'Na';
+    when 12 then s := 'Mg';
+    when 13 then s := 'Al';
+    when 14 then s := 'Si';
+    when 15 then s := 'P';
+    when 16 then s := 'S';
+    when 17 then s := 'Cl';
+    when 18 then s := 'Ar';
+    when 19 then s := 'K';
+    when 20 then s := 'Ca';
+    when 21 then s := 'Sc';
+    when 22 then s := 'Ti';
+    when 23 then s := 'V';
+    when 24 then s := 'Cr';
+    when 25 then s := 'Mn';
+    when 26 then s := 'Fe';
+    when 27 then s := 'Co';
+    when 28 then s := 'Ni';
+    when 29 then s := 'Cu';
+    when 30 then s := 'Zn';
+    when 31 then s := 'Ga';
+    when 32 then s := 'Ge';
+    when 33 then s := 'As';
+    when 34 then s := 'Se';
+    when 35 then s := 'Br';
+    when 36 then s := 'Kr';
+    when 37 then s := 'Rb';
+    when 38 then s := 'Sr';
+    when 39 then s := 'Y';
+    when 40 then s := 'Zr';
+    when 41 then s := 'Nb';
+    when 42 then s := 'Mo';
+    when 43 then s := 'Tc';
+    when 44 then s := 'Ru';
+    when 45 then s := 'Rh';
+    when 46 then s := 'Pd';
+    when 47 then s := 'Ag';
+    when 48 then s := 'Cd';
+    when 49 then s := 'In';
+    when 50 then s := 'Sn';
+    when 51 then s := 'Sb';
+    when 52 then s := 'Te';
+    when 53 then s := 'I';
+    when 54 then s := 'Xe';
+    when 55 then s := 'Cs';
+    when 56 then s := 'Ba';
+    when 57 then s := 'La';
+    when 58 then s := 'Ce';
+    when 59 then s := 'Pr';
+    when 60 then s := 'Nd';
+    when 61 then s := 'Pm';
+    when 62 then s := 'Sm';
+    when 63 then s := 'Eu';
+    when 64 then s := 'Gd';
+    when 65 then s := 'Tb';
+    when 66 then s := 'Dy';
+    when 67 then s := 'Ho';
+    when 68 then s := 'Er';
+    when 69 then s := 'Tm';
+    when 70 then s := 'Yb';
+    when 71 then s := 'Lu';
+    when 72 then s := 'Hf';
+    when 73 then s := 'Ta';
+    when 74 then s := 'W';
+    when 75 then s := 'Re';
+    when 76 then s := 'Os';
+    when 77 then s := 'Ir';
+    when 78 then s := 'Pt';
+    when 79 then s := 'Au';
+    when 80 then s := 'Hg';
+    when 81 then s := 'Tl';
+    when 82 then s := 'Pb';
+    when 83 then s := 'Bi';
+    when 84 then s := 'Po';
+    when 85 then s := 'At';
+    when 86 then s := 'Rn';
+    when 87 then s := 'Fr';
+    when 88 then s := 'Ra';
+    when 89 then s := 'Ac';
+    when 90 then s := 'Th';
+    when 91 then s := 'Pa';
+    when 92 then s := 'U';
+    when 93 then s := 'Np';
+    when 94 then s := 'Pu';
+    when 95 then s := 'Am';
+    when 96 then s := 'Cm';
+    when 97 then s := 'Bk';
+    when 98 then s := 'Cf';
+    when 99 then s := 'Es';
+    when 100 then s := 'Fm';
+    when 101 then s := 'Md';
+    when 102 then s := 'No';
+    when 103 then s := 'Lr';
+    when 104 then s := 'Rf';
+    when 105 then s := 'Db';
+    when 106 then s := 'Sg';
+    when 107 then s := 'Bh';
+    when 108 then s := 'Hs';
+    when 109 then s := 'Mt';
+    when 110 then s := 'Ds';
+    when 111 then s := 'Rg';
+    when 112 then s := 'Cn';
+    when 113 then s := 'Fl';
+    when 114 then s := 'Lv';
+  end case;
+
+  if atom.aromaticity = 1 then s := lower (s); end if;
+
+  smi := smi || s;
+
+  if ch = 1 then smi := smi || '@'; end if;
+  if ch = 2 then smi := smi || '@@'; end if;
+
+  if atom.hcount > 0 then smi := smi || 'H'; end if;
+  if atom.hcount > 1 then smi := smi || to_char (atom.hcount); end if;
+
+  if atom.charge > 0 then smi := smi || '+'; end if;
+  if atom.charge < 0 then smi := smi || '-'; end if;
+  if abs (atom.charge) > 1 then smi := smi || to_char (abs (atom.charge)); end if;
+
+  smi := smi || ']';
+
+  return smi;
+
+end;

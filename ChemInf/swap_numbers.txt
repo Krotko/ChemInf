@@ -1,0 +1,9 @@
+create or replace procedure swap_numbers (x in out number, y in out number) deterministic parallel_enable is
+  t number;
+begin
+
+  t := x;
+  x := y;
+  y := t;
+
+end;

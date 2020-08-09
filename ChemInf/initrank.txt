@@ -1,0 +1,16 @@
+create or replace function initrank (atom in Cheminf.atom) return number deterministic parallel_enable is
+  atomic_vector varchar2(13);
+  signcharge char(1);
+begin
+
+  if atom.charge >= 0 then signcharge := '0';
+                      else signcharge := '1';
+  end if;
+
+  atomic_vector := to_char (atom.degree) || lpad (to_char (atom.number), 3, '0') || to_char (atom.hcount) || signcharge ||
+  to_char (abs (atom.charge)) || to_char (atom.connectivity) || to_char (atom.valence) || lpad (to_char (nvl (atom.mass, 0)), 3, '0')
+  || to_char (atom.chirality);
+
+  return to_number (atomic_vector);
+
+end;

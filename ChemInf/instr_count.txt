@@ -1,0 +1,15 @@
+create or replace function instr_count (str in varchar2, substr in varchar2) return integer deterministic parallel_enable is
+  n integer := 0;
+  pos integer;
+begin
+
+  pos := instr (str, substr);
+
+  while pos > 0 loop
+        pos := instr (str, substr, pos + 1);
+        n := n + 1;
+  end loop;
+
+  return n;
+
+end;

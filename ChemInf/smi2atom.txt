@@ -1,0 +1,234 @@
+create or replace function smi2atom (atomsymbol in varchar2) return ChemInf.atom deterministic parallel_enable is
+  s varchar2(16);
+  isotope varchar2(3) := '';
+  i binary_integer;
+  m binary_integer;
+  atom ChemInf.atom;
+begin
+
+  atom.charge := 0;
+  atom.hcount := 0;
+  atom.aromaticity := 0;
+  atom.parity := 0;
+  atom.organogen := 0;
+
+  case atomsymbol
+    when 'C' then atom.number := 6;
+    when 'c' then atom.number := 6; atom.aromaticity := 1;
+    when 'N' then atom.number := 7;
+    when 'n' then atom.number := 7; atom.aromaticity := 1;
+    when '[nH]' then atom.number := 7; atom.aromaticity := 1; atom.hcount := 1;
+    when 'O' then atom.number := 8;
+    when 'o' then atom.number := 8; atom.aromaticity := 1;
+    when 'S' then atom.number := 16;
+    when 's' then atom.number := 16; atom.aromaticity := 1;
+    when 'F' then atom.number := 9;
+    when 'Cl' then atom.number := 17;
+    when 'Br' then atom.number := 35;
+    when 'I' then atom.number := 53;
+    when 'H' then atom.number := 1;
+    when 'D' then atom.number := 1; atom.mass := 2;
+    when 'T' then atom.number := 1; atom.mass := 3;
+    when 'B' then atom.number := 5;
+    when 'b' then atom.number := 5; atom.aromaticity := 1;
+    when 'P' then atom.number := 15;
+    when 'p' then atom.number := 15; atom.aromaticity := 1;
+    when '*' then atom.number := 0; atom.aromaticity := 1;
+    else null;
+  end case;
+
+  if atom.number is not null then atom.organogen := 1; return atom; end if;
+
+  s := atomsymbol;
+
+  m := instr (s, ':');
+  if m > 0 then
+     atom.class := to_number (substr (s, m+1, length(s)-m-1));
+     s := substr (s, 1, m-1) || ']';
+  end if;
+
+  if regexp_like (s, '\[[0-9]') then
+    i := 2;
+    isotope := '';
+    while i <= length (s) and substr (s, i, 1) between '0' and '9' loop
+      isotope := isotope || substr (s, i, 1);
+      i := i + 1;
+    end loop;
+    s := '[' || substr (s, i);
+  end if;
+
+  if isotope is not null then atom.mass := to_number (isotope); end if;
+
+  s := replace (s, '++', '+2');
+
+  if substr (s, 1, 1) = '[' and instr (s, '+') > 0 then
+    m := instr (s, '+');
+    if substr (s, m+1, 1) between '0' and '9'
+       then atom.charge := to_number (substr (s, m+1, 1));
+            s := substr (s, 1, m-1) || substr (s, m+2);
+       else atom.charge := 1;
+            s := substr (s, 1, m-1) || substr (s, m+1);
+    end if;
+  end if;
+
+  s := replace (s, '--', '-2');
+
+  if substr (s, 1, 1) = '[' and instr (s, '-') > 0 then
+    m := instr (s, '-');
+    if substr (s, m+1, 1) between '0' and '9'
+       then atom.charge := - to_number (substr (s, m+1, 1));
+            s := substr (s, 1, m-1) || substr (s, m+2);
+       else atom.charge := -1;
+            s := substr (s, 1, m-1) || substr (s, m+1);
+    end if;
+  end if;
+
+  atom.parity := instr_count (s, '@');
+  s := replace (s, '@');
+
+  if substr (s, 1, 1) = '[' and instr (s, 'H') > 0 and s <> '[H]' then
+
+    m := instr (s, 'H', 1, instr_count (s, 'H'));
+
+    if substr (s, m+1, 1) between '0' and '9'
+       then atom.hcount := to_number (substr (s, m+1, 1));
+            s := substr (s, 1, m-1) || substr (s, m+2);
+    end if;
+
+    if substr (s, m+1, 1) in ('+', '-', ']')
+       then atom.hcount := 1;
+            s := substr (s, 1, m-1) || substr (s, m+1);
+    end if;
+
+  end if;
+
+  case s
+    when '[*]' then atom.number := 0; atom.aromaticity := 1;
+    when '[H]' then atom.number := 1;
+    when '[He]' then atom.number := 2;
+    when '[Li]' then atom.number := 3;
+    when '[Be]' then atom.number := 4;
+    when '[B]' then atom.number := 5;
+    when '[b]' then atom.number := 5; atom.aromaticity := 1;
+    when '[C]' then atom.number := 6;
+    when '[c]' then atom.number := 6; atom.aromaticity := 1;
+    when '[N]' then atom.number := 7;
+    when '[n]' then atom.number := 7; atom.aromaticity := 1;
+    when '[O]' then atom.number := 8;
+    when '[o]' then atom.number := 8; atom.aromaticity := 1;
+    when '[F]' then atom.number := 9;
+    when '[Ne]' then atom.number := 10;
+    when '[Na]' then atom.number := 11;
+    when '[Mg]' then atom.number := 12;
+    when '[Al]' then atom.number := 13;
+    when '[Si]' then atom.number := 14;
+    when '[P]' then atom.number := 15;
+    when '[p]' then atom.number := 15; atom.aromaticity := 1;
+    when '[S]' then atom.number := 16;
+    when '[s]' then atom.number := 16; atom.aromaticity := 1;
+    when '[Cl]' then atom.number := 17;
+    when '[Ar]' then atom.number := 18;
+    when '[K]' then atom.number := 19;
+    when '[Ca]' then atom.number := 20;
+    when '[Sc]' then atom.number := 21;
+    when '[Ti]' then atom.number := 22;
+    when '[V]' then atom.number := 23;
+    when '[Cr]' then atom.number := 24;
+    when '[Mn]' then atom.number := 25;
+    when '[Fe]' then atom.number := 26;
+    when '[Co]' then atom.number := 27;
+    when '[Ni]' then atom.number := 28;
+    when '[Cu]' then atom.number := 29;
+    when '[Zn]' then atom.number := 30;
+    when '[Ga]' then atom.number := 31;
+    when '[Ge]' then atom.number := 32;
+    when '[As]' then atom.number := 33;
+    when '[as]' then atom.number := 33; atom.aromaticity := 1;
+    when '[Se]' then atom.number := 34;
+    when '[se]' then atom.number := 34; atom.aromaticity := 1;
+    when '[Br]' then atom.number := 35;
+    when '[Kr]' then atom.number := 36;
+    when '[Rb]' then atom.number := 37;
+    when '[Sr]' then atom.number := 38;
+    when '[Y]' then atom.number := 39;
+    when '[Zr]' then atom.number := 40;
+    when '[Nb]' then atom.number := 41;
+    when '[Mo]' then atom.number := 42;
+    when '[Tc]' then atom.number := 43;
+    when '[Ru]' then atom.number := 44;
+    when '[Rh]' then atom.number := 45;
+    when '[Pd]' then atom.number := 46;
+    when '[Ag]' then atom.number := 47;
+    when '[Cd]' then atom.number := 48;
+    when '[In]' then atom.number := 49;
+    when '[Sn]' then atom.number := 50;
+    when '[Sb]' then atom.number := 51;
+    when '[Te]' then atom.number := 52;
+    when '[te]' then atom.number := 52; atom.aromaticity := 1;
+    when '[I]' then atom.number := 53;
+    when '[Xe]' then atom.number := 54;
+    when '[Cs]' then atom.number := 55;
+    when '[Ba]' then atom.number := 56;
+    when '[La]' then atom.number := 57;
+    when '[Ce]' then atom.number := 58;
+    when '[Pr]' then atom.number := 59;
+    when '[Nd]' then atom.number := 60;
+    when '[Pm]' then atom.number := 61;
+    when '[Sm]' then atom.number := 62;
+    when '[Eu]' then atom.number := 63;
+    when '[Gd]' then atom.number := 64;
+    when '[Tb]' then atom.number := 65;
+    when '[Dy]' then atom.number := 66;
+    when '[Ho]' then atom.number := 67;
+    when '[Er]' then atom.number := 68;
+    when '[Tm]' then atom.number := 69;
+    when '[Yb]' then atom.number := 70;
+    when '[Lu]' then atom.number := 71;
+    when '[Hf]' then atom.number := 72;
+    when '[Ta]' then atom.number := 73;
+    when '[W]' then atom.number := 74;
+    when '[Re]' then atom.number := 75;
+    when '[Os]' then atom.number := 76;
+    when '[Ir]' then atom.number := 77;
+    when '[Pt]' then atom.number := 78;
+    when '[Au]' then atom.number := 79;
+    when '[Hg]' then atom.number := 80;
+    when '[Tl]' then atom.number := 81;
+    when '[Pb]' then atom.number := 82;
+    when '[Bi]' then atom.number := 83;
+    when '[Po]' then atom.number := 84;
+    when '[At]' then atom.number := 85;
+    when '[Rn]' then atom.number := 86;
+    when '[Fr]' then atom.number := 87;
+    when '[Ra]' then atom.number := 88;
+    when '[Ac]' then atom.number := 89;
+    when '[Th]' then atom.number := 90;
+    when '[Pa]' then atom.number := 91;
+    when '[U]' then atom.number := 92;
+    when '[Np]' then atom.number := 93;
+    when '[Pu]' then atom.number := 94;
+    when '[Am]' then atom.number := 95;
+    when '[Cm]' then atom.number := 96;
+    when '[Bk]' then atom.number := 97;
+    when '[Cf]' then atom.number := 98;
+    when '[Es]' then atom.number := 99;
+    when '[Fm]' then atom.number := 100;
+    when '[Md]' then atom.number := 101;
+    when '[No]' then atom.number := 102;
+    when '[Lr]' then atom.number := 103;
+    when '[Rf]' then atom.number := 104;
+    when '[Db]' then atom.number := 105;
+    when '[Sg]' then atom.number := 106;
+    when '[Bh]' then atom.number := 107;
+    when '[Hs]' then atom.number := 108;
+    when '[Mt]' then atom.number := 109;
+    when '[Ds]' then atom.number := 110;
+    when '[Rg]' then atom.number := 111;
+    when '[Cn]' then atom.number := 112;
+    when '[Fl]' then atom.number := 113;
+    when '[Lv]' then atom.number := 114;
+  end case;
+
+  return atom;
+
+end;

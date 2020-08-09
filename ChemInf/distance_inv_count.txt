@@ -1,0 +1,58 @@
+create or replace function distance_inv_count (atoms in Cheminf.atoms, bonds in Cheminf.bonds, n in integer, map in matrix) return integer
+deterministic parallel_enable is
+  d integer;
+  s integer := 0;
+  marked numarray := numarray();
+  queue numarray := numarray();
+  startpos binary_integer;
+  pos binary_integer;
+begin
+
+  if atoms(n).ring_connectivity = 0 then return 1; end if;
+
+  for i in 1..atoms.count loop marked.extend; marked(i) := 0; end loop;
+  marked(n) := 1;
+
+  queue.extend(2);
+  queue(1) := n;
+  queue(2) := 0;
+  startpos := 1;
+  d := 0;
+
+  while startpos <= queue.count loop
+
+    pos := queue(startpos);
+    startpos := startpos + 1;
+
+    if pos = 0 then
+       queue.extend; queue(queue.count) := 0;
+       d := d + 1;
+       pos := queue(startpos);
+       startpos := startpos + 1;
+    end if;
+
+    exit when pos = 0;
+
+    s := s + power (10, d);
+
+    for j in 1..map(pos).count loop
+
+      if bonds(map(pos)(j)).atom1 = pos and bonds(map(pos)(j)).ring_membership > 0 and marked(bonds(map(pos)(j)).atom2) = 0 then
+
+         queue.extend; queue(queue.count) := bonds(map(pos)(j)).atom2; marked(bonds(map(pos)(j)).atom2) := 1;
+
+      end if;
+
+      if bonds(map(pos)(j)).atom2 = pos and bonds(map(pos)(j)).ring_membership > 0 and marked(bonds(map(pos)(j)).atom1) = 0 then
+
+         queue.extend; queue(queue.count) := bonds(map(pos)(j)).atom1; marked(bonds(map(pos)(j)).atom1) := 1;
+
+      end if;
+
+    end loop;
+
+  end loop;
+
+  return (s-1)/10;
+
+end;

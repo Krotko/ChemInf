@@ -1,0 +1,29 @@
+create or replace function rank_matrix (x in matrix) return numarray deterministic parallel_enable is
+  y matrix := matrix();
+  d matrix := matrix();
+  r numarray := numarray();
+begin
+
+  y := x;
+
+  sort_matrix (y);
+
+  d.extend; d(1) := y(1);
+
+  for i in 2..y.count loop
+
+    if lexcompare (y(i), d(d.count)) = -1 then d.extend; d(d.count) := y(i); end if;
+
+  end loop;
+
+  for i in 1..x.count loop
+
+    r.extend;
+
+    r(i) := binary_search_matrix (x(i), d);
+
+  end loop;
+
+  return r;
+
+end;

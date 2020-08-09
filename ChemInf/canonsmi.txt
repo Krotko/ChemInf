@@ -1,0 +1,112 @@
+create or replace function canonsmi (pSmi in varchar2, chimode in integer default (1)) return varchar2
+deterministic parallel_enable is
+  atoms Cheminf.atoms := Cheminf.atoms();
+  bonds Cheminf.bonds := Cheminf.bonds();
+  map matrix := matrix();
+  ranks matrix := matrix();
+  dist numarray := numarray();
+  i binary_integer;
+  j binary_integer;
+  k binary_integer;
+  part binary_integer;
+  prevpart binary_integer;
+  d binary_integer;
+  r binary_integer;
+  tiedrank binary_integer;
+  smi varchar2(1024);
+  minsmi varchar2(1024);
+begin
+
+  smilin (pSmi, atoms, bonds);
+
+  d := atoms(1).rank;
+
+  for i in 2..atoms.count loop
+
+    if atoms(i).rank > d then d := atoms(i).rank; end if;
+
+  end loop;
+
+  if d = atoms.count then return cangen (atoms, bonds, chimode); end if;
+
+  map := map_count (atoms, bonds);
+
+  ranks.extend; ranks(1) := numarray();
+  for i in 1..atoms.count loop ranks(1).extend; ranks(1)(i) := atoms(i).rank; end loop;
+  dist.extend; dist(1) := d; part := 1; prevpart := 1;
+
+  loop
+
+    for i in prevpart..ranks.count loop
+
+      if dist(i) < atoms.count then
+
+         r := dist(i); tiedrank := 0;
+
+         while tiedrank = 0 and r > 0 loop
+
+           j := 1; k := 0;
+
+           while k <= 1 and j <= atoms.count loop
+
+             if ranks(i)(j) = r then k := k + 1; end if;
+
+             if k = 2 and atoms(j).ring_connectivity > 0 then tiedrank := r; end if;
+
+             j := j + 1;
+
+           end loop;
+
+           r := r - 1;
+
+         end loop;
+
+         if tiedrank > 0 then
+
+            for j in 1..atoms.count loop
+
+              if ranks(i)(j) = tiedrank then
+
+                 ranks.extend; ranks(ranks.count) := numarray(); dist.extend;
+
+                 -- Breaking Ties
+                 for k in 1..atoms.count loop ranks(ranks.count).extend; ranks(ranks.count)(k) := 2 * ranks(i)(k); end loop;
+                 ranks(ranks.count)(j) := ranks(ranks.count)(j) - 1;
+
+                 for k in 1..atoms.count loop atoms(k).rank := ranks(ranks.count)(k); end loop;
+                 canon (atoms, bonds, map, dist(dist.count));
+                 for k in 1..atoms.count loop ranks(ranks.count)(k) := atoms(k).rank; end loop;
+
+              end if;
+
+            end loop;
+
+         end if;
+
+      end if;
+
+    end loop;
+
+    if ranks.count = part then exit;
+                          else prevpart := part + 1; part := ranks.count;
+    end if;
+
+  end loop;
+
+  minsmi := cangen (atoms, bonds, chimode);
+
+  -- CCAP - Canonical Code Generation by Automorphism Permutation
+  for i in prevpart..ranks.count-1 loop
+
+    for j in 1..atoms.count loop atoms(j).rank := ranks(i)(j); end loop;
+
+    smi := cangen (atoms, bonds, chimode);
+
+    if smi < minsmi then minsmi := smi; end if;
+
+  end loop;
+
+  return minsmi;
+
+exception when others then return null;
+end;

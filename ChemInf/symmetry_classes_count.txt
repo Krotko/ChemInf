@@ -1,0 +1,15 @@
+create or replace function symmetry_classes_count (atoms in Cheminf.atoms) return integer deterministic parallel_enable is
+  m integer;
+begin
+
+  m := atoms(1).symmetry_class;
+
+  for i in 2..atoms.count loop
+
+    if atoms(i).symmetry_class > m then m := atoms(i).symmetry_class; end if;
+
+  end loop;
+
+  return m;
+
+end;

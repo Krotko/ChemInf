@@ -1,0 +1,9 @@
+create or replace function chiralatoms_count (atoms in Cheminf.atoms) return integer deterministic parallel_enable is
+  n integer := 0;
+begin
+
+  for i in 1..atoms.count loop n := n + sign (atoms(i).parity); end loop;
+
+  return n;
+
+end;

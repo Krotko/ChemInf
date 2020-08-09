@@ -1,0 +1,25 @@
+create or replace function binary_search_matrix (a in numarray, x in matrix) return integer deterministic parallel_enable is
+  l integer;
+  r integer;
+  m integer;
+begin
+
+  if lexcompare (a, x(1)) = 1 or lexcompare (a, x(x.count)) = -1 then return null; end if;
+
+  l := 1; r := x.count;
+
+  while l < r loop
+
+    m := floor ((l+r)/2);
+
+    if lexcompare (x(m), a) = 1 then l := m + 1;
+                                else r := m;
+    end if;
+
+  end loop;
+
+  if lexcompare (x(r), a) = 0 then return r;
+                              else return null;
+  end if;
+
+end;

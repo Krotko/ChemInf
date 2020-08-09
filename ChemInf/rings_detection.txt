@@ -1,0 +1,140 @@
+create or replace procedure rings_detection (atoms in out Cheminf.atoms, bonds in out Cheminf.bonds, map in matrix)
+deterministic parallel_enable is
+  f binary_integer;
+  n integer;
+  b integer;
+  marked numarray := numarray();
+  queue numarray := numarray();
+  startpos binary_integer;
+  pos binary_integer;
+begin
+
+  -- Pruning
+  for i in 1..atoms.count loop
+
+    if atoms(i).degree >= 2 then atoms(i).ring_membership := 1;
+                            else atoms(i).ring_membership := 0;
+    end if;
+
+  end loop;
+
+  loop
+
+    f := 0;
+
+    for i in 1..atoms.count loop
+
+      if atoms(i).ring_membership = 1 then
+
+         n := 0;
+
+         for j in 1..map(i).count loop
+
+           if bonds(map(i)(j)).atom1 = i then n := n + atoms(bonds(map(i)(j)).atom2).ring_membership;
+                                         else n := n + atoms(bonds(map(i)(j)).atom1).ring_membership;
+           end if;
+
+         end loop;
+
+         if n < 2 then atoms(i).ring_membership := 0; f := 1; end if;
+
+      end if;
+
+    end loop;
+
+    exit when f = 0;
+
+  end loop;
+
+  for i in 1..atoms.count loop marked.extend; end loop;
+
+  for i in 1..bonds.count loop
+
+    bonds(i).ring_membership := 0;
+
+    if atoms(bonds(i).atom1).ring_membership = 1 and atoms(bonds(i).atom2).ring_membership = 1 and bonds(i).bondtype > 0 then
+
+       b := bonds(i).bondtype; bonds(i).bondtype := 0;
+
+       for j in 1..atoms.count loop marked(j) := 0; end loop;
+
+       queue.trim(queue.count);
+       queue.extend(2);
+       queue(1) := bonds(i).atom1;
+       queue(2) := 0;
+       startpos := 1;
+
+       n := 1;
+
+       -- Breadth-First Search
+       while startpos <= queue.count loop
+
+         pos := queue(startpos);
+         startpos := startpos + 1;
+
+         if pos = 0 then
+            queue.extend; queue(queue.count) := 0;
+            n := n + 1;
+            pos := queue(startpos);
+            startpos := startpos + 1;
+         end if;
+
+         exit when pos = bonds(i).atom2 or pos = 0;
+
+         marked(pos) := 1;
+
+         for j in 1..map(pos).count loop
+
+           if bonds(map(pos)(j)).atom1 = pos and atoms(bonds(map(pos)(j)).atom2).ring_membership = 1
+              and bonds(map(pos)(j)).bondtype > 0 and marked(bonds(map(pos)(j)).atom2) = 0 then
+
+              queue.extend; queue(queue.count) := bonds(map(pos)(j)).atom2;
+
+           end if;
+
+           if bonds(map(pos)(j)).atom2 = pos and atoms(bonds(map(pos)(j)).atom1).ring_membership = 1
+              and bonds(map(pos)(j)).bondtype > 0 and marked(bonds(map(pos)(j)).atom1) = 0 then
+
+              queue.extend; queue(queue.count) := bonds(map(pos)(j)).atom1;
+
+           end if;
+
+         end loop;
+
+       end loop;
+
+       if pos = bonds(i).atom2 then bonds(i).ring_membership := 1; bonds(i).ring_size := n; end if;
+
+       bonds(i).bondtype := b;
+
+    end if;
+
+  end loop;
+
+  for i in 1..atoms.count loop
+
+    atoms(i).ring_connectivity := 0;
+    atoms(i).max_bonds_ringsize := 0;
+
+    if atoms(i).ring_membership = 1 then
+
+       n := atoms.count + 1;
+
+       for j in 1..map(i).count loop
+
+         atoms(i).ring_connectivity := atoms(i).ring_connectivity + sign (bonds(map(i)(j)).ring_membership);
+
+         if bonds(map(i)(j)).ring_size < n then n := bonds(map(i)(j)).ring_size; end if;
+         if bonds(map(i)(j)).ring_size > atoms(i).max_bonds_ringsize then atoms(i).max_bonds_ringsize := bonds(map(i)(j)).ring_size; end if;
+
+       end loop;
+
+       if n <= atoms.count then atoms(i).ring_size := n; end if;
+
+       atoms(i).ring_membership := sign (atoms(i).ring_connectivity);
+
+    end if;
+
+  end loop;
+
+end;

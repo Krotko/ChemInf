@@ -1,0 +1,18 @@
+create or replace function map_count (atoms in Cheminf.atoms, bonds in Cheminf.bonds) return matrix deterministic parallel_enable is
+  map matrix := matrix();
+begin
+
+  for i in 1..atoms.count loop map.extend; map(i) := numarray(); end loop;
+
+  for i in 1..bonds.count loop
+
+    if bonds(i).bondtype > 0 then
+       map(bonds(i).atom1).extend; map(bonds(i).atom1)(map(bonds(i).atom1).count) := i;
+       map(bonds(i).atom2).extend; map(bonds(i).atom2)(map(bonds(i).atom2).count) := i;
+    end if;
+
+  end loop;
+
+  return map;
+
+end;

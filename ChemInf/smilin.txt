@@ -1,0 +1,623 @@
+create or replace procedure smilin (smiles in varchar2, atoms out Cheminf.atoms, bonds out Cheminf.bonds) deterministic parallel_enable is
+  smi varchar2(1024);
+  s varchar2(16);
+  i binary_integer;
+  j binary_integer;
+  k binary_integer;
+  n binary_integer;
+  m binary_integer;
+  f binary_integer;
+  p binary_integer;
+  r binary_integer;
+  st binary_integer;
+  c binary_integer;
+  a varchar2(16);
+  bondtype integer;
+  degree integer := 0;
+  expl_valence integer := 0;
+  stack numarray := numarray();
+  ringlist numarray := numarray();
+  stereocenters numarray := numarray();
+  permutation numarray := numarray(null, null, null, null);
+  tbonds Cheminf.bonds := Cheminf.bonds();
+  map matrix := matrix();
+begin
+
+  smi := smiles;
+
+  m := instr (smi, ' ');
+
+  if m > 0 then smi := substr (smi, 1, m-1); end if; -- space termination
+
+  m := instr (smi, chr (9));
+
+  if m > 0 then smi := substr (smi, 1, m-1); end if; -- tab termination
+
+  atoms := Cheminf.atoms();
+
+  -- first parsing for atoms only
+  n := 0;
+  i := 1;
+
+  while i <= length (smi) loop
+
+    f := 0;
+
+    s := substr (smi, i, 2);
+
+    if s in ('Cl', 'Br')
+       then f := 1; a := s; i := i + 1; n := n + 1;
+       else s := substr (s, 1, 1);
+    end if;
+
+    if f = 0 and s in ('C', 'c', 'N', 'n', 'O', 'o', 'S', 's', 'F', 'I', 'H', 'D', 'T', 'B', 'b', 'P', 'p', '*')
+       then f := 1; a := s; n := n + 1;
+    end if;
+
+    if f = 0 and s = '[' then
+
+       j := instr (smi, ']', i);
+
+       if j > 0 then
+          f := 1;
+          a := substr (smi, i, j-i+1);
+          i := j;
+          n := n + 1;
+       end if;
+
+    end if;
+
+    if f = 1 then atoms.extend; atoms(atoms.count) := smi2atom (a); end if;
+
+    if f = 1 and atoms(atoms.count).parity > 0 then
+       stereocenters.extend; stereocenters(stereocenters.count) := n;
+       stereocenters.extend(4);
+    end if;
+
+    i := i + 1;
+
+  end loop;
+
+  bonds := Cheminf.bonds();
+
+  -- second parsing for bonds
+  n := 0;
+  i := 1;
+
+  while i <= length (smi) loop
+
+    f := 0;
+
+    s := substr (smi, i, 2);
+
+    if s in ('Cl', 'Br')
+       then f := 1; a := s; i := i + 1; n := n + 1;
+       else s := substr (s, 1, 1);
+    end if;
+
+    if f = 0 and s in ('C', 'c', 'N', 'n', 'O', 'o', 'S', 's', 'F', 'I', 'H', 'D', 'T', 'B', 'b', 'P', 'p', '*')
+       then f := 1; a := s; n := n + 1;
+    end if;
+
+    if f = 0 and s = '[' then
+
+       j := instr (smi, ']', i);
+
+       if j > 0 then
+          f := 1;
+          a := substr (smi, i, j-i+1);
+          i := j;
+          n := n + 1;
+       end if;
+
+    end if;
+
+    p := n;
+
+    while i <= length (smi) loop
+
+      i := i + 1; s := substr (smi, i, 1);
+
+      m := p + 1;
+      r := 0;
+
+      while s = ')' loop
+        n := stack(stack.count); stack.trim;
+        i := i + 1; s := substr (smi, i, 1);
+      end loop;
+
+      if s = '(' then
+         stack.extend; stack(stack.count) := n;
+         i := i + 1; s := substr (smi, i, 1);
+      end if;
+
+      f := 0;
+
+      case s
+        when '-' then bondtype := 1; f := 1;
+        when '=' then bondtype := 2; f := 1;
+        when '#' then bondtype := 3; f := 1;
+        when '$' then bondtype := 4; f := 1;
+        when ':' then bondtype := 1; f := 1;
+        when '/' then bondtype := 1; f := 1;
+        when '\' then bondtype := 1; f := 1;
+        when '.' then bondtype := 0; f := 1;
+        else bondtype := 1;
+      end case;
+
+      if f = 1 then i := i + 1; s := substr (smi, i, 1); end if;
+
+      if (s between '0' and '9') or s = '%' then
+
+        if s = '%' then
+           i := i + 1; s := substr (smi, i, 1);
+           if s between '0' and '9' then s := substr (smi, i, 2); i := i + 1;
+           elsif s = '(' then
+             while i <= length (smi) loop i := i + 1; s := s || substr (smi, i, 1); exit when substr (smi, i, 1) = ')'; end loop;
+             s := replace (substr (s, 2), ')');
+           end if;
+        end if;
+
+        j := 1;
+
+        while r = 0 and j <= ringlist.count/3 loop
+
+          if ringlist(3*j-2) = to_number (s) then m := ringlist(3*j-1); r := ringlist(3*j); ringlist(3*j-2) := null; end if;
+          j := j + 1;
+
+        end loop;
+
+        if r > 0
+
+           then bonds(r).atom2 := n;
+
+                if bondtype > bonds(r).bondtype then bonds(r).bondtype := bondtype; end if;
+
+           else ringlist.extend; ringlist(ringlist.count) := to_number (s);
+                ringlist.extend; ringlist(ringlist.count) := n;
+                ringlist.extend; ringlist(ringlist.count) := bonds.count + 1;
+                m := null;
+
+        end if;
+
+      end if;
+
+      if nvl (m, 0) <= atoms.count and bondtype > 0 and r = 0 then
+         bonds.extend;
+         bonds(bonds.count).atom1 := n;
+         bonds(bonds.count).atom2 := m;
+         bonds(bonds.count).bondtype := bondtype;
+      end if;
+
+      if not ((substr (smi, i, 1) in ('(', ')', '-', '=', '#', '$', ':', '/', '\', '.', '%'))
+               or (substr (smi, i, 1) between '0' and '9'))
+         then exit;
+      end if;
+
+    end loop;
+
+    n := p;
+
+  end loop;
+
+  for i in 1..atoms.count loop
+
+    degree := 0;
+    expl_valence := 0;
+
+    for j in 1..bonds.count loop
+
+      if i in (bonds(j).atom1, bonds(j).atom2) and bonds(j).bondtype > 0 then
+
+         degree := degree + sign (bonds(j).bondtype);
+         expl_valence := expl_valence + bonds(j).bondtype;
+
+      end if;
+
+    end loop;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 6 and atoms(i).aromaticity = 0 then -- C
+       atoms(i).hcount := 4 - expl_valence;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 6 and atoms(i).aromaticity = 1 then -- c
+       atoms(i).hcount := 3 - expl_valence; atoms(i).valence := 4;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 7 and atoms(i).aromaticity = 0 and expl_valence <= 3 then -- N
+       atoms(i).hcount := 3 - expl_valence;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 7 and atoms(i).aromaticity = 1 then -- n
+       atoms(i).valence := 3;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 8 and atoms(i).aromaticity = 0 then -- O
+       atoms(i).hcount := 2 - expl_valence;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 8 and atoms(i).aromaticity = 1 then -- o
+       atoms(i).valence := 2;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 16 and atoms(i).aromaticity = 0 and expl_valence <= 2 then -- S
+       atoms(i).hcount := 2 - expl_valence;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 16 and atoms(i).aromaticity = 0 and expl_valence in (3, 4) then -- S
+       atoms(i).hcount := 4 - expl_valence;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 16 and atoms(i).aromaticity = 0 and expl_valence in (5, 6) then -- S
+       atoms(i).hcount := 6 - expl_valence;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 16 and atoms(i).aromaticity = 1 then -- s
+       atoms(i).valence := 2;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number in (9, 17, 35, 53) then -- F, Cl, Br, I
+       atoms(i).hcount := 1 - expl_valence;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 5 and atoms(i).aromaticity = 0 then -- B
+       atoms(i).hcount := 3 - expl_valence;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 5 and atoms(i).aromaticity = 1 then -- b
+       atoms(i).valence := 3;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 15 and atoms(i).aromaticity = 0 and expl_valence <= 3 then -- P
+       atoms(i).hcount := 3 - expl_valence;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 15 and atoms(i).aromaticity = 0 and expl_valence > 3 then -- P
+       atoms(i).hcount := 5 - expl_valence;
+    end if;
+
+    if atoms(i).organogen = 1 and atoms(i).number = 15 and atoms(i).aromaticity = 1 then -- p
+       atoms(i).valence := 3;
+    end if;
+
+    if atoms(i).hcount < 0 then atoms(i).hcount := 0; end if;
+
+    atoms(i).degree := degree;
+    atoms(i).connectivity := atoms(i).degree + atoms(i).hcount;
+    if atoms(i).valence is null then atoms(i).valence := expl_valence + atoms(i).hcount; end if;
+    atoms(i).total_hcount := atoms(i).hcount;
+    atoms(i).chirality := 0;
+
+  end loop;
+
+  for i in 1..bonds.count loop
+
+    if atoms(bonds(i).atom1).number = 1 and bonds(i).bondtype > 0
+       then atoms(bonds(i).atom2).total_hcount := atoms(bonds(i).atom2).total_hcount + 1;
+    end if;
+
+    if atoms(bonds(i).atom2).number = 1 and bonds(i).bondtype > 0
+       then atoms(bonds(i).atom1).total_hcount := atoms(bonds(i).atom1).total_hcount + 1;
+    end if;
+
+  end loop;
+
+  if stereocenters.count > 0 then -- third parsing for stereocenters
+
+  ringlist.trim(ringlist.count);
+  n := 0;
+  i := 1;
+
+  while i <= length (smi) loop
+
+    f := 0;
+
+    s := substr (smi, i, 2);
+
+    if s in ('Cl', 'Br')
+       then f := 1; a := s; i := i + 1; n := n + 1;
+       else s := substr (s, 1, 1);
+    end if;
+
+    if f = 0 and s in ('C', 'c', 'N', 'n', 'O', 'o', 'S', 's', 'F', 'I', 'H', 'D', 'T', 'B', 'b', 'P', 'p', '*')
+       then f := 1; a := s; n := n + 1;
+    end if;
+
+    if f = 0 and s = '[' then
+
+       j := instr (smi, ']', i);
+
+       if j > 0 then
+          f := 1;
+          a := substr (smi, i, j-i+1);
+          i := j;
+          n := n + 1;
+       end if;
+
+    end if;
+
+    st := 0;
+
+    if atoms(n).parity > 0 then
+       j := 1;
+       while st = 0 and j <= stereocenters.count/5 loop
+         if stereocenters(5*j-4) = n then st := j; end if;
+         j := j + 1;
+       end loop;
+    end if;
+
+    if st > 0 and atoms(n).hcount >= 1 then
+       c := 0; k := 3;
+       while c = 0 and k >= 0 loop
+         if stereocenters(5*st-k) is null then c := k; end if;
+         k := k - 1;
+       end loop;
+       for j in 1..atoms(n).hcount loop stereocenters(5*st-c) := 0; c:= c - 1; end loop;
+    end if;
+
+    if st > 0
+       and ((atoms(n).number = 16 and atoms(n).valence = 4 and atoms(n).degree <= 3)
+             or (atoms(n).number = 15 and atoms(n).valence = 3 and atoms(n).degree <= 3))
+       then
+       c := 0; k := 3;
+       while c = 0 and k >= 0 loop
+         if stereocenters(5*st-k) is null then c := k; end if;
+         k := k - 1;
+       end loop;
+       stereocenters(5*st-c) := -1; -- и заносим туда -1
+    end if;
+
+    p := n;
+
+    while i <= length (smi) loop
+
+      i := i + 1; s := substr (smi, i, 1);
+
+      m := p + 1;
+      r := 0;
+
+      while s = ')' loop
+        n := stack(stack.count); stack.trim;
+        i := i + 1; s := substr (smi, i, 1);
+      end loop;
+
+      if s = '(' then
+         stack.extend; stack(stack.count) := n;
+         i := i + 1; s := substr (smi, i, 1);
+      end if;
+
+      f := 0;
+
+      if s in ('-', '=', '#', '$', ':', '/', '\', '.') then f := 1; end if;
+
+      if s = '.' then bondtype := 0; else bondtype := 1; end if;
+
+      if f = 1 then i := i + 1; s := substr (smi, i, 1); end if;
+
+      if (s between '0' and '9') or s = '%' then
+
+        if s = '%' then
+           i := i + 1; s := substr (smi, i, 1);
+           if s between '0' and '9' then s := substr (smi, i, 2); i := i + 1;
+           elsif s = '(' then
+             while i <= length (smi) loop i := i + 1; s := s || substr (smi, i, 1); exit when substr (smi, i, 1) = ')'; end loop;
+             s := replace (substr (s, 2), ')');
+           end if;
+        end if;
+
+        j := 1;
+
+        while r = 0 and j <= ringlist.count/3 loop
+
+          if ringlist(3*j-2) = to_number (s) then m := ringlist(3*j-1); r := ringlist(3*j); ringlist(3*j-2) := null; end if;
+          j := j + 1;
+
+        end loop;
+
+        if r > 0
+
+           then tbonds(r).atom2 := n;
+
+           else ringlist.extend; ringlist(ringlist.count) := to_number (s);
+                ringlist.extend; ringlist(ringlist.count) := n;
+                ringlist.extend; ringlist(ringlist.count) := tbonds.count + 1;
+                m := null;
+
+        end if;
+
+      end if;
+
+      if nvl (m, 0) <= atoms.count and bondtype > 0 and r = 0 then
+         tbonds.extend;
+         tbonds(tbonds.count).atom1 := n;
+         tbonds(tbonds.count).atom2 := m;
+         tbonds(tbonds.count).bondtype := bondtype;
+      end if;
+
+      if m is null then m := bonds(tbonds.count).atom2; end if;
+
+      if atoms(n).parity > 0 and atoms.count > 1 and n in (bonds(tbonds.count).atom1, bonds(tbonds.count).atom2)
+         and bonds(tbonds.count).bondtype > 0 and m <= atoms.count then
+         st := 0; j := 1;
+         while st = 0 and j <= stereocenters.count/5 loop
+           if stereocenters(5*j-4) = n then st := j; end if;
+           j := j + 1;
+         end loop;
+         c := 0; k := 3;
+         while c = 0 and k >= 0 loop
+           if stereocenters(5*st-k) is null then c := k; end if;
+           k := k - 1;
+         end loop;
+         stereocenters(5*st-c) := m;
+      end if;
+
+      if m = p + 1 and m <= atoms.count and atoms(m).parity > 0 and bonds(tbonds.count).bondtype > 0 then
+         st := 0; j := 1;
+         while st = 0 and j <= stereocenters.count/5 loop
+           if stereocenters(5*j-4) = m then st := j; end if;
+           j := j + 1;
+         end loop;
+         c := 0; k := 3;
+         while c = 0 and k >= 0 loop
+           if stereocenters(5*st-k) is null then c := k; end if;
+           k := k - 1;
+         end loop;
+         stereocenters(5*st-c) := n;
+      end if;
+
+      if not ((substr (smi, i, 1) in ('(', ')', '-', '=', '#', '$', ':', '/', '\', '.', '%'))
+               or (substr (smi, i, 1) between '0' and '9'))
+         then exit;
+      end if;
+
+    end loop;
+
+    n := p;
+
+  end loop;
+
+  end if;
+
+  -- Removing of explicit [H]
+  i := 1;
+
+  while i <= atoms.count loop
+
+    f := 0;
+
+    if atoms(i).number = 1 and atoms(i).degree = 1 and atoms(i).mass is null and atoms(i).charge = 0 then
+
+       f := 1;
+
+       m := 0; k := 0; j := 1;
+       while k = 0 and j <= bonds.count loop
+         if bonds(j).atom1 = i and bonds(j).bondtype = 1 then m := j; k := bonds(j).atom2; end if;
+         if bonds(j).atom2 = i and bonds(j).bondtype = 1 then m := j; k := bonds(j).atom1; end if;
+         j := j + 1;
+       end loop;
+
+       if atoms(k).number = 1 then f := 0; end if;
+
+       if f = 1 then
+
+          atoms(k).hcount := atoms(k).hcount + 1;
+          atoms(k).degree := atoms(k).degree - 1;
+
+          if atoms(k).parity > 0 then
+             st := 0; j := 1;
+             while st = 0 and j <= stereocenters.count/5 loop
+               if stereocenters(5*j-4) = k then st := j; end if;
+               j := j + 1;
+             end loop;
+             for j in reverse 0..3 loop
+               if stereocenters(5*st-j) = i then stereocenters(5*st-j) := 0; end if;
+             end loop;
+          end if;
+
+          if m > 0 then for j in m..bonds.count-1 loop bonds(j) := bonds(j+1); end loop; bonds.trim; end if;
+
+          for j in i..atoms.count-1 loop atoms(j) := atoms(j+1); end loop; atoms.trim;
+
+          for j in 1..bonds.count loop
+
+            if bonds(j).atom1 > i then bonds(j).atom1 := bonds(j).atom1 - 1; end if;
+            if bonds(j).atom2 > i then bonds(j).atom2 := bonds(j).atom2 - 1; end if;
+
+          end loop;
+
+          for j in 1..stereocenters.count loop
+
+            if stereocenters(j) > i then stereocenters(j) := stereocenters(j) - 1; end if;
+
+          end loop;
+
+          i := i - 1;
+
+       end if;
+
+    end if;
+
+    i := i + 1;
+
+  end loop;
+
+  for i in 1..stereocenters.count loop
+
+    if stereocenters(i) is null then stereocenters(i) := -1; end if;
+
+  end loop;
+
+  map := map_count (atoms, bonds);
+
+  rings_detection (atoms, bonds, map);
+
+  aromaticity_detection (atoms, bonds, map);
+
+  symmetry_detection (atoms, bonds, map);
+
+  stereocenters_detection (atoms, bonds, map);
+
+  if chiralatoms_count (atoms) = 1 then
+     i := 1; while atoms(i).parity = 0 loop i := i + 1; end loop;
+     if atoms(i).stereocenter = 0 then atoms(i).parity := 0; end if;
+  end if;
+
+  for i in 1..stereocenters.count/5 loop
+
+    permutation.trim(permutation.count);
+
+    for j in reverse 0..3 loop
+
+      permutation.extend;
+
+      if stereocenters(5*i-j) > 0 then permutation(permutation.count) := atoms(stereocenters(5*i-j)).symmetry_class;
+                                  else permutation(permutation.count) := stereocenters(5*i-j);
+      end if;
+
+    end loop;
+
+    case permutation_class_TH (permutation)
+      when 1 then atoms(stereocenters(5*i-4)).chirality := atoms(stereocenters(5*i-4)).parity;
+      when 2 then atoms(stereocenters(5*i-4)).chirality := 3 - atoms(stereocenters(5*i-4)).parity;
+      when 0 then atoms(stereocenters(5*i-4)).chirality := 0;
+    end case;
+
+  end loop;
+
+  n := 0;
+
+  for i in 1..atoms.count loop
+
+    if atoms(i).stereocenter = 1 and atoms(i).parity > 0 then n := n + 1; end if;
+
+  end loop;
+
+  if n > 0 and chiralatoms_count (atoms) >= 2 then
+
+     for i in 1..atoms.count loop
+
+       atoms(i).rank := initrank (atoms(i));
+
+       for j in 1..map(i).count loop
+
+         if bonds(map(i)(j)).ring_size > 0 then atoms(i).rank := atoms(i).rank * prime (bonds(map(i)(j)).ring_size); end if;
+
+       end loop;
+
+     end loop;
+
+     canon (atoms, bonds, map, n);
+
+  end if;
+
+  for i in 1..stereocenters.count/5 loop
+
+    permutation := numarray(stereocenters(5*i-3), stereocenters(5*i-2), stereocenters(5*i-1), stereocenters(5*i));
+
+    p := permutation_class_TH (permutation);
+
+    if p = 2 and atoms(stereocenters(5*i-4)).parity > 0 then atoms(stereocenters(5*i-4)).parity := 3 - atoms(stereocenters(5*i-4)).parity; end if;
+
+  end loop;
+
+end;

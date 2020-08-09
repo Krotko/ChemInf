@@ -1,0 +1,47 @@
+create or replace procedure canon (atoms in out Cheminf.atoms, bonds in Cheminf.bonds, map in matrix, dist out integer)
+deterministic parallel_enable is
+  k binary_integer;
+  ranks numarray := numarray();
+  prev_ranks numarray := numarray();
+  prevdist integer;
+begin
+
+  -- Modified CANON Algorithm
+
+  for i in 1..atoms.count loop ranks.extend; ranks(ranks.count) := atoms(i).rank; end loop;
+
+  rank_numarray (ranks, dist); prevdist := dist - 1;
+
+  while dist < atoms.count and dist > prevdist loop
+
+    prev_ranks := ranks; prevdist := dist;
+
+    for i in 1..atoms.count loop
+
+      ranks(i) := prime (ranks(i)); ranks(i) := ranks(i) * ranks(i); ranks(i) := ranks(i) * ranks(i); ranks(i) := ranks(i) * ranks(i);
+
+      for j in 1..map(i).count loop
+
+        if bonds(map(i)(j)).atom1 = i then k := bonds(map(i)(j)).atom2;
+                                      else k := bonds(map(i)(j)).atom1;
+        end if;
+
+        case bonds(map(i)(j)).bondtype
+          when 1 then ranks(i) := ranks(i) * prime (prev_ranks(k));
+          when 2 then ranks(i) := ranks(i) * prime (prev_ranks(k)) * prime (prev_ranks(k));
+          when 3 then ranks(i) := ranks(i) * prime (prev_ranks(k)) * prime (prev_ranks(k)) * prime (prev_ranks(k));
+          when 4 then ranks(i) := ranks(i) * prime (prev_ranks(k)) * prime (prev_ranks(k)) * prime (prev_ranks(k)) * prime (prev_ranks(k));
+          else null;
+        end case;
+
+      end loop;
+
+    end loop;
+
+    rank_numarray (ranks, dist);
+
+  end loop;
+
+  for i in 1..atoms.count loop atoms(i).rank := ranks(i); end loop;
+
+end;

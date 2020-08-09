@@ -1,0 +1,83 @@
+create or replace function components_count (atoms in Cheminf.atoms, bonds in Cheminf.bonds, map in matrix) return integer
+deterministic parallel_enable is
+  marked numarray := numarray();
+  stack numarray := numarray();
+  i binary_integer;
+  m binary_integer;
+  pos binary_integer;
+  nextpos binary_integer;
+  branches binary_integer;
+  n integer := 1;
+begin
+
+  if atoms.count = 0 then return 0; end if;
+
+  for i in 1..atoms.count loop marked.extend; marked(i) := 0; end loop;
+
+  pos := 1;
+  m := 0;
+
+  loop
+
+    if marked(pos) = 0 then
+       marked(pos) := 1; m := m + 1;
+    end if;
+
+    branches := 0;
+
+    for i in 1..map(pos).count loop
+
+      if bonds(map(pos)(i)).atom1 = pos and bonds(map(pos)(i)).bondtype > 0 and marked(bonds(map(pos)(i)).atom2) = 0 then
+
+         branches := branches + 1;
+         nextpos := bonds(map(pos)(i)).atom2;
+
+      end if;
+
+      if bonds(map(pos)(i)).atom2 = pos and bonds(map(pos)(i)).bondtype > 0 and marked(bonds(map(pos)(i)).atom1) = 0 then
+
+         branches := branches + 1;
+         nextpos := bonds(map(pos)(i)).atom1;
+
+      end if;
+
+    end loop;
+
+    if branches > 1 then
+       stack.extend; stack(stack.count) := pos;
+    end if;
+
+    if branches >= 1 then
+
+      pos := nextpos;
+
+    end if;
+
+    if branches = 0 and stack.count > 0 then
+       pos := stack(stack.count); stack.trim;
+       branches := 1;
+    end if;
+
+    if branches = 0 and stack.count = 0 then
+
+      exit when m >= atoms.count;
+
+      n := n + 1;
+
+      nextpos := 0;
+      i := 1;
+
+      while nextpos = 0 and i <= atoms.count loop
+        if marked(i) = 0 then nextpos := i; end if;
+        i := i + 1;
+      end loop;
+
+      pos := nextpos;
+
+    end if;
+
+  end loop;
+
+  return n;
+
+end;

@@ -1,0 +1,149 @@
+create or replace procedure aromaticity_detection (atoms in out Cheminf.atoms, bonds in out Cheminf.bonds, map in matrix)
+deterministic parallel_enable is
+  sp2atoms numarray := numarray();
+  i binary_integer;
+  f binary_integer;
+  s integer;
+begin
+
+  for i in 1..atoms.count loop
+
+    sp2atoms.extend; sp2atoms(i) := 0;
+
+    if atoms(i).aromaticity = 1 then sp2atoms(i) := 1; end if;
+
+    if atoms(i).aromaticity = 0 and atoms(i).ring_membership > 0
+       and (atoms(i).ring_size in (5, 6, 7) or atoms(i).max_bonds_ringsize in (5, 6, 7))
+       and (
+        (atoms(i).number = 6 and atoms(i).organogen = 1) -- C
+        or
+        (atoms(i).number = 6 and atoms(i).charge = 1 and atoms(i).hcount = 0) -- [C+]
+        or
+        (atoms(i).number = 6 and atoms(i).charge = -1 and atoms(i).hcount = 0) -- [C-]
+        or
+        (atoms(i).number = 7 and atoms(i).organogen = 1) -- N
+        or
+        (atoms(i).number = 7 and atoms(i).charge = 1) -- [N+]
+        or
+        (atoms(i).number = 8 and atoms(i).charge = 1) -- [O+]
+        or
+        (atoms(i).number = 16 and atoms(i).charge = 1) -- [S+]
+        or
+        (atoms(i).number = 5 and atoms(i).organogen = 1) -- B
+        or
+        (atoms(i).number = 15 and atoms(i).organogen = 1) -- P
+        or
+        (atoms(i).number = 15 and atoms(i).charge = 1) -- [P+]
+        or
+        (atoms(i).number = 33 and atoms(i).charge = 0 and atoms(i).hcount = 0) -- As
+        or
+        (atoms(i).number = 34 and atoms(i).charge = 1) -- [Se+]
+        or
+        (atoms(i).number = 52 and atoms(i).charge = 1) -- [Te+]
+        ) then
+
+       s := 0;
+
+       for j in 1..map(i).count loop
+
+         if i in (bonds(map(i)(j)).atom1, bonds(map(i)(j)).atom2) and bonds(map(i)(j)).bondtype = 2 then s := s + 1; end if;
+
+       end loop;
+
+       if s = 1 then sp2atoms(i) := 1; end if;
+
+    end if;
+
+  end loop;
+
+  for i in 1..atoms.count loop
+
+    if sp2atoms(i) = 0 and atoms(i).aromaticity = 0 and atoms(i).ring_membership > 0
+       and (atoms(i).ring_size in (5, 6, 7) or atoms(i).max_bonds_ringsize in (5, 6, 7))
+       and (
+        (atoms(i).number = 7 and atoms(i).organogen = 1) -- N
+        or
+        (atoms(i).number = 7 and atoms(i).charge = -1) -- [N-]
+        or
+        (atoms(i).number = 8 and atoms(i).organogen = 1) -- O
+        or
+        (atoms(i).number = 16 and atoms(i).organogen = 1) -- S
+        or
+        (atoms(i).number = 6 and atoms(i).charge = -1) -- [C-]
+        or
+        (atoms(i).number = 15 and atoms(i).organogen = 1) -- P
+        or
+        (atoms(i).number = 15 and atoms(i).charge = -1) -- [P-]
+        or
+        (atoms(i).number = 33 and atoms(i).charge = 0) -- [As]
+        or
+        (atoms(i).number = 34 and atoms(i).charge = 0) -- [Se]
+        or
+        (atoms(i).number = 52 and atoms(i).charge = 0) -- [Te]
+        ) then
+
+       s := 0;
+
+       for j in 1..map(i).count loop
+
+         if bonds(map(i)(j)).atom1 = i and bonds(map(i)(j)).bondtype = 1 then s := s + sp2atoms(bonds(map(i)(j)).atom2); end if;
+         if bonds(map(i)(j)).atom2 = i and bonds(map(i)(j)).bondtype = 1 then s := s + sp2atoms(bonds(map(i)(j)).atom1); end if;
+
+       end loop;
+
+       if s >= 2 then sp2atoms(i) := 1; end if;
+
+    end if;
+
+  end loop;
+
+  loop
+
+    f := 0;
+
+    for i in 1..atoms.count loop
+
+      if sp2atoms(i) = 1 then
+
+        s := 0;
+
+        for j in 1..map(i).count loop
+
+          if bonds(map(i)(j)).atom1 = i then s := s + sp2atoms(bonds(map(i)(j)).atom2); end if;
+          if bonds(map(i)(j)).atom2 = i then s := s + sp2atoms(bonds(map(i)(j)).atom1); end if;
+
+        end loop;
+
+        if s < 2 then sp2atoms(i) := 0; f := 1; end if;
+
+      end if;
+
+    end loop;
+
+    exit when f = 0;
+
+  end loop;
+
+  for i in 1..atoms.count loop
+
+    if sp2atoms(i) = 1 then
+
+       atoms(i).aromaticity := 1;
+
+       for j in 1..map(i).count loop
+
+         if bonds(map(i)(j)).atom1 = i and sp2atoms(bonds(map(i)(j)).atom2) = 1 and bonds(map(i)(j)).bondtype = 2
+            then bonds(map(i)(j)).bondtype := 1;
+         end if;
+
+         if bonds(map(i)(j)).atom2 = i and sp2atoms(bonds(map(i)(j)).atom1) = 1 and bonds(map(i)(j)).bondtype = 2
+            then bonds(map(i)(j)).bondtype := 1;
+         end if;
+
+       end loop;
+
+    end if;
+
+  end loop;
+
+end;

@@ -1,0 +1,15 @@
+create or replace procedure swap_numarray (x in out numarray, y in out numarray) deterministic parallel_enable is
+  t numarray := numarray ();
+begin
+
+  t := x;
+
+  if x.count > y.count then x.trim(y.count - x.count + 1); end if;
+  if x.count < y.count then for i in x.count..y.count loop x.extend; end loop; end if;
+  x := y;
+
+  if y.count > t.count then y.trim(t.count - y.count + 1); end if;
+  if y.count < t.count then for i in y.count..t.count loop y.extend; end loop; end if;
+  y := t;
+
+end;

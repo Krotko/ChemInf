@@ -1,0 +1,13 @@
+create or replace function rings_count (atoms in Cheminf.atoms, bonds in Cheminf.bonds) return integer deterministic parallel_enable is
+  b integer := 0;
+begin
+
+  for i in 1..bonds.count loop
+
+    if bonds(i).bondtype > 0 and atoms(bonds(i).atom1).number <> 1 and atoms(bonds(i).atom2).number <> 1 then b := b + 1; end if;
+
+  end loop;
+
+  return b + components_count (atoms, bonds, map_count (atoms, bonds)) - ha_count (atoms);
+
+end;
