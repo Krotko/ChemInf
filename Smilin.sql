@@ -58,8 +58,7 @@ begin
     outp := '';
 
     outp := outp || lpad (to_char (bonds(i).atom1), 2, ' ') || chr (9) || lpad (to_char (bonds(i).atom2), 2, ' ') || chr (9) || to_char (bonds(i).bondtype) ||
-    chr (9) || chr (9) || chr (9) || to_char (bonds(i).ring_membership) || chr (9) || lpad (nvl (to_char (bonds(i).ring_size), ' '), 2, ' ') || chr (9) ||
-    to_char (bonds(i).rotbond);
+    chr (9) || chr (9) || chr (9) || to_char (bonds(i).ring_membership) || chr (9) || lpad (nvl (to_char (bonds(i).ring_size), ' '), 2, ' ');
 
     dbms_output.put_line (outp);
 
